@@ -4,7 +4,7 @@ import socket
 import sys
 import errno
 
-from .utils import (
+from utils import (
     register_spp,
     get_mac,
     get_adapter_powered_status,
@@ -16,7 +16,7 @@ from .utils import (
     device_powered,
 )
 
-from .threads import WrapThread
+from threads import WrapThread
 
 BLUETOOTH_TIMEOUT = 0.01
 

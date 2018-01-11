@@ -1,11 +1,23 @@
 from colours import BLUE
+from btcomm import BluetoothServer
+from threading import Event
 import json
 
 class BlueMatrix():
     """
 
     """
-    def __init__(self, cols = 5, rows = 3, border = True, visible = True, colour = BLUE, bt_device = "hci0", bt_port = 1, auto_start_server = True):
+    def __init__(self, 
+        cols = 5, 
+        rows = 3,
+        border = True, 
+        visible = True, 
+        colour = BLUE, 
+        bt_device = "hci0", 
+        bt_port = 1, 
+        auto_start_server = True,
+        print_messages = True):
+
         self._cols = 0
         self._rows = 0
         self._border = border
@@ -17,41 +29,20 @@ class BlueMatrix():
         self._bt_device = bt_device
         self._bt_port = 1
         self._data_buffer = ""
+        self._print_messages = print_messages
 
+        self._is_connected_event = Event()
+        
         self._when_client_connects = None
         self._when_client_disconnects = None
+
+        self._cb = CommandBuilder(self)
         
         self._create_server()
 
         if auto_start_server:
             self.start()
-        
-    def _update_cells(self, cols, rows):
-        # create new cells
-        new_cells = {}
-
-        for c in range(cols):
-            for r in range(rows):
-                # if cell already exist, reuse it
-                if (c,r) in self._cells.keys():
-                    new_cells[c,r] = self._cells[(c,r)]
-                else:   
-                    new_cells[c,r] = BlueMatrixCell(c, r, self._border, self._visible, self._colour)
-                
-        self._cols = cols
-        self._rows = rows
-        self._cells = new_cells
-    
-    # METHODS
-    def cell(self, col, row):
-        try:
-            return self._cells[(col, row)]
-        except KeyError as e:
-            raise KeyError("Cell ({},{}) does not exist".format(col, row))
-
-    def resize(self, cols, rows):
-        self._update_cells(cols, rows)
-
+            
     # PROPERTIES
     @property
     def cells(self):
@@ -106,62 +97,31 @@ class BlueMatrix():
             cell.visible = value
 
     @property
+    def server(self):
+        """
+        The :class:`.btcomm.BluetoothServer` instance that is being used to communicate
+        with clients.
+        """
+        return self._server
+
+    @property
     def running(self):
         """
         Returns a ``True`` if the server is running.
         """
         return self._server.running
 
-    def start(self):
+    @property
+    def print_messages(self):
         """
-        Start the :class:`.btcomm.BluetoothServer` if it is not already running. By default the server is started at
-        initialisation.
+        When set to ``True`` results in messages relating to the status of the Bluetooth server
+        to be printed.
         """
-        self._server.start()
-        self._print_message("Server started {}".format(self.server.server_address))
-        self._print_message("Waiting for connection")
+        return self._print_messages
 
-    def _create_server(self):
-        self._server = BluetoothServer(
-                self._data_received,
-                when_client_connects = self._client_connected,
-                when_client_disconnects = self._client_disconnected,
-                device = self._bt_device,
-                port = self._bt_port,
-                power_up_device = True,
-                auto_start = False)
-
-    def stop(self):
-        """
-        Stop the Bluetooth server.
-        """
-        self._server.stop()
-
-    def _client_connected(self):
-        self._is_connected_event.set()
-        self._print_message("Client connected {}".format(self.server.client_address))
-        if self.when_client_connects:
-            self.when_client_connects()
-
-    def _client_disconnected(self):
-        self._is_connected_event.clear()
-        self._print_message("Client disconnected")
-        if self.when_client_disconnects:
-            self.when_client_disconnects()
-
-    def _data_received(self, data):
-        #add the data received to the buffer
-        self._data_buffer += data
-
-        #get any full commands ended by \n
-        last_command = self._data_buffer.rfind("\n")
-        if last_command != -1:
-            commands = self._data_buffer[:last_command].split("\n")
-            #remove the processed commands from the buffer
-            self._data_buffer = self._data_buffer[last_command + 1:]
-            print(commands)
-            #self._process_commands(commands)
-
+    @print_messages.setter
+    def print_messages(self, value):
+        self._print_messages = value
 
     @property
     def when_client_connects(self):
@@ -185,12 +145,95 @@ class BlueMatrix():
     def when_client_disconnects(self, value):
         self._when_client_disconnects = value
 
+    # METHODS
+    def start(self):
+        """
+        Start the :class:`.btcomm.BluetoothServer` if it is not already running. By default the server is started at
+        initialisation.
+        """
+        self._server.start()
+        self._print_message("Server started {}".format(self.server.server_address))
+        self._print_message("Waiting for connection")
+
+    def stop(self):
+        """
+        Stop the Bluetooth server.
+        """
+        self._server.stop()
+
+    def cell(self, col, row):
+        try:
+            return self._cells[(col, row)]
+        except KeyError as e:
+            raise KeyError("Cell ({},{}) does not exist".format(col, row))
+
+    def resize(self, cols, rows):
+        self._update_cells(cols, rows)
+        self.server.send(self._cb.all)
+
+    # INTERNAL METHODS
+    def _update_cells(self, cols, rows):
+        # create new cells
+        new_cells = {}
+
+        for c in range(cols):
+            for r in range(rows):
+                # if cell already exist, reuse it
+                if (c,r) in self._cells.keys():
+                    new_cells[c,r] = self._cells[(c,r)]
+                else:   
+                    new_cells[c,r] = BlueMatrixCell(self, c, r, self._border, self._visible, self._colour)
+                
+        self._cols = cols
+        self._rows = rows
+        self._cells = new_cells
+
+    def _create_server(self):
+        self._server = BluetoothServer(
+                self._data_received,
+                when_client_connects = self._client_connected,
+                when_client_disconnects = self._client_disconnected,
+                device = self._bt_device,
+                port = self._bt_port,
+                power_up_device = True,
+                auto_start = False)
+
+    def _client_connected(self):
+        self._is_connected_event.set()
+        self._print_message("Client connected {}".format(self.server.client_address))
+        if self.when_client_connects:
+            self.when_client_connects()
+
+    def _client_disconnected(self):
+        self._is_connected_event.clear()
+        self._print_message("Client disconnected")
+        if self.when_client_disconnects:
+            self.when_client_disconnects()
+
+    def _data_received(self, data):
+        #add the data received to the buffer
+        self._data_buffer += data
+
+        #get any full commands ended by \n
+        last_command = self._data_buffer.rfind("\n")
+        if last_command != -1:
+            commands = self._data_buffer[:last_command].split("\n")
+            #remove the processed commands from the buffer
+            self._data_buffer = self._data_buffer[last_command + 1:]
+            print("in = {}".format(commands))
+            #self._process_commands(commands)
+
+    def _print_message(self, message):
+        if self.print_messages:
+            print(message)
+
     def __str__(self):
         return "cols = {}, rows = {}, border = {}, visible = {}, colour = {}".format(self._col, self._row, self._border, self._visible, self._colour)
 
 
 class BlueMatrixCell():
-    def __init__(self, col, row, border, visible, colour):
+    def __init__(self, matrix, col, row, border, visible, colour):
+        self._matrix = matrix
         self._col = col
         self._row = row
         self._border = border
@@ -290,7 +333,7 @@ class CommandBuilder():
         cmd["visible"] = cell.visible
         return cmd
         
-
 bm = BlueMatrix(cols = 5, rows = 5)
-c = CommandBuilder(bm)
-print(json.dumps(c.all()))
+
+from signal import pause
+pause()
