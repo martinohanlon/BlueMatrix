@@ -7,6 +7,17 @@
     android:layout_height="match_parent"
     tools:context="com.stuffaboutcode.bluematrix.Matrix">
 
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:text="status"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <com.stuffaboutcode.bluematrix.DynamicMatrix
         android:id="@+id/matrix"
         android:layout_width="match_parent"
@@ -22,12 +33,12 @@
         app:layout_constraintTop_toTopOf="parent"
         app:rows="3" />
 
-    <Button
+    <!--<Button
         android:id="@+id/button"
         android:layout_width="53dp"
         android:layout_height="48dp"
         android:text="+"
         tools:layout_editor_absoluteX="25dp"
-        tools:layout_editor_absoluteY="401dp" />
+        tools:layout_editor_absoluteY="401dp" />-->
 
 </android.support.constraint.ConstraintLayout>

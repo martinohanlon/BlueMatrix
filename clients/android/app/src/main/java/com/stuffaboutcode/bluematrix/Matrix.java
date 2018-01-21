@@ -1,20 +1,32 @@
 package com.stuffaboutcode.bluematrix;
 
+import android.app.ProgressDialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.content.Intent;
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 // import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
+import android.widget.Toast;
 import android.view.MotionEvent;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.content.res.TypedArray;
 import android.graphics.*;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.lang.Math;
+import java.util.UUID;
 
 import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
 
 class DynamicMatrix extends View {
 
@@ -290,6 +302,12 @@ class DynamicMatrix extends View {
         return true;
     }
 
+    public void update() {
+        // updates the matrix, must be called after each update to the matrix to display the changes
+        invalidate();
+        requestLayout();
+    }
+
     // getters and setters
     public ArrayList<ArrayList<MatrixCell>> getCells() {
         return mCells;
@@ -306,8 +324,7 @@ class DynamicMatrix extends View {
         mRows = rows;
         setupMatrix();
         sizeMatrix();
-        invalidate();
-        requestLayout();
+
     }
 
     public int getCols() {
@@ -383,24 +400,18 @@ class DynamicMatrix extends View {
         }
         public void setColor(int value) {
             updateColors(value);
-            invalidate();
-            requestLayout();
         }
         private boolean getBorder() {
             return mBorder;
         }
         public void setBorder(boolean value) {
             mBorder = value;
-            invalidate();
-            requestLayout();
         }
         public boolean getVisible() {
             return mVisible;
         }
         public void setVisible(boolean value) {
             mVisible = value;
-            invalidate();
-            requestLayout();
         }
         private void press() {
             mCurrentColor = mPressedColor;
@@ -445,18 +456,45 @@ class DynamicMatrix extends View {
 
 public class Matrix extends AppCompatActivity {
 
+    String address = null;
+    String deviceName = null;
+
+    BluetoothAdapter myBluetooth = null;
+    BluetoothSocket btSocket = null;
+    private boolean isBtConnected = false;
+    private boolean connectionLost = false;
+    static final UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+    private ProgressDialog progress;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_matrix);
 
-        final Button button = findViewById(R.id.button);
+        TextView statusView = (TextView)findViewById(R.id.status);
+
+        final DynamicMatrix matrix = findViewById(R.id.matrix);
+
+        Intent newint = getIntent();
+
+        deviceName = newint.getStringExtra(Connect.EXTRA_NAME);
+        address = newint.getStringExtra(Connect.EXTRA_ADDRESS);
+
+        statusView.setText("Connecting to " + deviceName);
+
+        new ConnectBT().execute();
+
+
+        /*final Button button = findViewById(R.id.button);
         button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 final DynamicMatrix matrix = findViewById(R.id.matrix);
-                /*matrix.setCols(matrix.getCols() + 1);
-                matrix.setRows(matrix.getRows() + 1);*/
-                /*matrix.getCell(1,0).setColor(Color.rgb(255,0,0));*/
+                //matrix.setCols(matrix.getCols() + 1);
+                //matrix.setRows(matrix.getRows() + 1);
+                //matrix.getCell(1,0).setColor(Color.rgb(255,0,0));
                 matrix.setSize(6, 3);
                 matrix.getCell(0,0).setVisible(false);
                 matrix.getCell(0,2).setVisible(false);
@@ -474,7 +512,130 @@ public class Matrix extends AppCompatActivity {
                 matrix.getCell(5,1).setColor(Color.rgb(0,255,0));
                 matrix.getCell(4,1).setBorder(false);
                 matrix.getCell(5,1).setBorder(false);
+                matrix.update();
             }
-        });
+        });*/
     }
+
+    private class ConnectBT extends AsyncTask<Void, Void, Void> {
+        private boolean ConnectSuccess = true;
+
+        @Override
+        protected void onPreExecute() {
+            progress = ProgressDialog.show(Matrix.this, "Connecting", "Please wait...");  //show a progress dialog
+        }
+
+        @Override
+        protected Void doInBackground(Void... devices) { //while the progress dialog is shown, the connection is done in background
+            try {
+                if (btSocket == null || !isBtConnected) {
+                    myBluetooth = BluetoothAdapter.getDefaultAdapter();//get the mobile bluetooth device
+                    BluetoothDevice dispositivo = myBluetooth.getRemoteDevice(address);//connects to the device's address and checks if it's available
+                    btSocket = dispositivo.createInsecureRfcommSocketToServiceRecord(myUUID);//create a RFCOMM (SPP) connection
+                    BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+                    btSocket.connect();//start connection
+                }
+            } catch (IOException e) {
+                ConnectSuccess = false;//if the try failed, you can check the exception here
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void result) { //after the doInBackground, it checks if everything went fine
+            super.onPostExecute(result);
+
+            if (!ConnectSuccess) {
+                Toast.makeText(getApplicationContext(), "Failed to connect", Toast.LENGTH_LONG).show();
+                finish();
+            } else {
+                msg("Connected to " + deviceName);
+                isBtConnected = true;
+                // start the connection monitor
+                new MonitorConnection().execute();
+            }
+            progress.dismiss();
+        }
+
+    }
+
+    private void msg(String message) {
+        TextView statusView = (TextView) findViewById(R.id.status);
+        statusView.setText(message);
+    }
+
+
+    private class MonitorConnection extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... devices) {
+            while (!connectionLost) {
+                try {
+                    //read from the buffer, when this errors the connection is lost
+                    // this was the only reliable way I found of monitoring the connection
+                    // .isConnected didnt work
+                    // BluetoothDevice.ACTION_ACL_DISCONNECTED didnt fire
+                    btSocket.getInputStream().read();
+                } catch (IOException e) {
+                    connectionLost = true;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void result) {
+            super.onPostExecute(result);
+
+            // if the bt is still connected, the connection must have been lost
+            if (isBtConnected) {
+                try {
+                    isBtConnected = false;
+                    btSocket.close();
+                } catch (IOException e) {
+                    // nothing doing, we are ending anyway!
+                }
+                Toast.makeText(getApplicationContext(), "Connection lost", Toast.LENGTH_LONG).show();
+                finish();
+            }
+        }
+    }
+
+    private void Disconnect() {
+        if (btSocket!=null) {
+            try {
+                isBtConnected = false;
+                btSocket.close();
+            } catch (IOException e) {
+                msg("Error");
+            }
+        }
+        Toast.makeText(getApplicationContext(),"Disconnected",Toast.LENGTH_LONG).show();
+        finish();
+    }
+
+    @Override
+    public void onBackPressed() {
+        Disconnect();
+    }
+
 }
+
+
+/* potential messages the matrix might receive
+
+messages:
+- matrix
+    - cols
+    - rows
+- cell [array]
+    - col
+    - row
+    - colour
+    - border
+    - visible
+
+- all - reconfiguration of the matrix and updated values for all the cells
+
+
+ */
