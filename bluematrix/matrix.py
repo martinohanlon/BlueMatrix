@@ -199,16 +199,21 @@ class BlueMatrix():
                 auto_start = False)
 
     def _client_connected(self):
+        # send setup data to the client
+        self.server.send(json.dumps(self._cb.all()))
+        
         self._is_connected_event.set()
         self._print_message("Client connected {}".format(self.server.client_address))
         if self.when_client_connects:
-            self.when_client_connects()
+            call_back_t = WrapThread(target=self.when_client_connects)
+            call_back_t.start()
 
     def _client_disconnected(self):
         self._is_connected_event.clear()
         self._print_message("Client disconnected")
         if self.when_client_disconnects:
-            self.when_client_disconnects()
+            call_back_t = WrapThread(target=self.when_client_disconnects)
+            call_back_t.start()
 
     def _data_received(self, data):
         #add the data received to the buffer
@@ -305,7 +310,6 @@ class CommandBuilder():
         cmd["matrix"] = {}
         cmd["matrix"]["cols"] = self._bm.cols
         cmd["matrix"]["rows"] = self._bm.rows
-        return cmd
 
     def cells(self):
         cmd = {}
@@ -316,7 +320,6 @@ class CommandBuilder():
         cmd["cell"] = []
         for cell in self._bm.cells:
             cmd["cell"].append(self._cell(cell))
-        return c
 
     def cell(self, col, row):
         cmd = {}
