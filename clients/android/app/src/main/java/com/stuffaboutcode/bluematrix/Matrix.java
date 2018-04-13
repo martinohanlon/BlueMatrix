@@ -6,10 +6,14 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Message;
+import android.support.v4.app.FragmentActivity;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 // import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.MotionEvent;
@@ -456,6 +460,27 @@ class DynamicMatrix extends View {
 
 public class Matrix extends AppCompatActivity {
 
+
+    /**
+     * Name of the connected device
+     */
+    private String mConnectedDeviceName = null;
+
+    /**
+     * String buffer for outgoing messages
+     */
+    private StringBuffer mOutStringBuffer;
+
+    /**
+     * Local Bluetooth adapter
+     */
+    private BluetoothAdapter mBluetoothAdapter = null;
+
+    /**
+     * Member object for the chat services
+     */
+    private BluetoothChatService mChatService = null;
+
     String address = null;
     String deviceName = null;
 
@@ -467,6 +492,8 @@ public class Matrix extends AppCompatActivity {
 
     private ProgressDialog progress;
 
+    TextView statusView;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -474,7 +501,7 @@ public class Matrix extends AppCompatActivity {
 
         setContentView(R.layout.activity_matrix);
 
-        TextView statusView = (TextView)findViewById(R.id.status);
+        statusView = (TextView)findViewById(R.id.status);
 
         final DynamicMatrix matrix = findViewById(R.id.matrix);
 
@@ -483,10 +510,32 @@ public class Matrix extends AppCompatActivity {
         deviceName = newint.getStringExtra(Connect.EXTRA_NAME);
         address = newint.getStringExtra(Connect.EXTRA_ADDRESS);
 
-        statusView.setText("Connecting to " + deviceName);
+        // Get local Bluetooth adapter
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
-        new ConnectBT().execute();
+        // If the adapter is null, then Bluetooth is not supported
+        if (mBluetoothAdapter == null) {
+            Toast.makeText(getApplicationContext(), "Bluetooth is not available", Toast.LENGTH_LONG).show();
+            this.finish();
+        }
 
+        // Initialize the BluetoothChatService to perform bluetooth connections
+        mChatService = new BluetoothChatService(this, mHandler);
+
+        // Initialize the buffer for outgoing messages
+        mOutStringBuffer = new StringBuffer("");
+
+        // Get the BluetoothDevice object
+        BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+        // Attempt to connect to the device
+        mChatService.connect(device, true);
+
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        sendMessage("hi");
 
         /*final Button button = findViewById(R.id.button);
         button.setOnClickListener(new View.OnClickListener() {
@@ -517,107 +566,89 @@ public class Matrix extends AppCompatActivity {
         });*/
     }
 
-    private class ConnectBT extends AsyncTask<Void, Void, Void> {
-        private boolean ConnectSuccess = true;
-
-        @Override
-        protected void onPreExecute() {
-            progress = ProgressDialog.show(Matrix.this, "Connecting", "Please wait...");  //show a progress dialog
+    public void sendMessage(String message) {
+        // Check that we're actually connected before trying anything
+        if (mChatService.getState() != BluetoothChatService.STATE_CONNECTED) {
+            Toast.makeText(this, "cant send message - not connected", Toast.LENGTH_SHORT).show();
+            return;
         }
 
-        @Override
-        protected Void doInBackground(Void... devices) { //while the progress dialog is shown, the connection is done in background
-            try {
-                if (btSocket == null || !isBtConnected) {
-                    myBluetooth = BluetoothAdapter.getDefaultAdapter();//get the mobile bluetooth device
-                    BluetoothDevice dispositivo = myBluetooth.getRemoteDevice(address);//connects to the device's address and checks if it's available
-                    btSocket = dispositivo.createInsecureRfcommSocketToServiceRecord(myUUID);//create a RFCOMM (SPP) connection
-                    BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
-                    btSocket.connect();//start connection
-                }
-            } catch (IOException e) {
-                ConnectSuccess = false;//if the try failed, you can check the exception here
-            }
-            return null;
-        }
+        // Check that there's actually something to send
+        if (message.length() > 0) {
+            // Get the message bytes and tell the BluetoothChatService to write
+            byte[] send = message.getBytes();
+            mChatService.write(send);
 
-        @Override
-        protected void onPostExecute(Void result) { //after the doInBackground, it checks if everything went fine
-            super.onPostExecute(result);
-
-            if (!ConnectSuccess) {
-                Toast.makeText(getApplicationContext(), "Failed to connect", Toast.LENGTH_LONG).show();
-                finish();
-            } else {
-                msg("Connected to " + deviceName);
-                isBtConnected = true;
-                // start the connection monitor
-                new MonitorConnection().execute();
-            }
-            progress.dismiss();
-        }
-
-    }
-
-    private void msg(String message) {
-        TextView statusView = (TextView) findViewById(R.id.status);
-        statusView.setText(message);
-    }
-
-
-    private class MonitorConnection extends AsyncTask<Void, Void, Void> {
-
-        @Override
-        protected Void doInBackground(Void... devices) {
-            while (!connectionLost) {
-                try {
-                    //read from the buffer, when this errors the connection is lost
-                    // this was the only reliable way I found of monitoring the connection
-                    // .isConnected didnt work
-                    // BluetoothDevice.ACTION_ACL_DISCONNECTED didnt fire
-                    btSocket.getInputStream().read();
-                } catch (IOException e) {
-                    connectionLost = true;
-                }
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Void result) {
-            super.onPostExecute(result);
-
-            // if the bt is still connected, the connection must have been lost
-            if (isBtConnected) {
-                try {
-                    isBtConnected = false;
-                    btSocket.close();
-                } catch (IOException e) {
-                    // nothing doing, we are ending anyway!
-                }
-                Toast.makeText(getApplicationContext(), "Connection lost", Toast.LENGTH_LONG).show();
-                finish();
-            }
+            // Reset out string buffer to zero and clear the edit text field
+            mOutStringBuffer.setLength(0);
         }
     }
 
-    private void Disconnect() {
-        if (btSocket!=null) {
-            try {
-                isBtConnected = false;
-                btSocket.close();
-            } catch (IOException e) {
-                msg("Error");
-            }
-        }
-        Toast.makeText(getApplicationContext(),"Disconnected",Toast.LENGTH_LONG).show();
+    private void disconnect() {
+        if (mChatService != null) {
+            mChatService.stop();
+        };
         finish();
     }
 
     @Override
     public void onBackPressed() {
-        Disconnect();
+        disconnect();
     }
+
+    private final Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+
+            switch (msg.what) {
+                case Constants.MESSAGE_STATE_CHANGE:
+                    switch (msg.arg1) {
+                        case BluetoothChatService.STATE_CONNECTED:
+                            statusView.setText("Connected to " + deviceName);
+                            break;
+                        case BluetoothChatService.STATE_CONNECTING:
+                            statusView.setText("Connecting to " + deviceName);
+                            break;
+                        case BluetoothChatService.STATE_LISTEN:
+                        case BluetoothChatService.STATE_NONE:
+                            statusView.setText("Not connected");
+                            disconnect();
+                            break;
+                    }
+                    break;
+                case Constants.MESSAGE_WRITE:
+                    byte[] writeBuf = (byte[]) msg.obj;
+                    // construct a string from the buffer
+                    String writeMessage = new String(writeBuf);
+                    // message sent
+                    //mConversationArrayAdapter.add("Me:  " + writeMessage);
+                    break;
+                case Constants.MESSAGE_READ:
+                    byte[] readBuf = (byte[]) msg.obj;
+                    // construct a string from the valid bytes in the buffer
+                    String readMessage = new String(readBuf, 0, msg.arg1);
+                    // message received
+                    statusView.setText(readMessage);
+                    //mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
+                    break;
+                case Constants.MESSAGE_DEVICE_NAME:
+                    // save the connected device's name
+                    mConnectedDeviceName = msg.getData().getString(Constants.DEVICE_NAME);
+                    if (null != this) {
+                        Toast.makeText(getApplicationContext(), "Connected to "
+                                + mConnectedDeviceName, Toast.LENGTH_SHORT).show();
+                    }
+                    break;
+                case Constants.MESSAGE_TOAST:
+                    if (null != this) {
+                        Toast.makeText(getApplicationContext(), msg.getData().getString(Constants.TOAST),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                    break;
+            }
+
+        }
+    };
 
 }
 
