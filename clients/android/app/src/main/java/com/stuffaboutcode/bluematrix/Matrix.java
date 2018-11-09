@@ -11,9 +11,7 @@ import android.os.Message;
 import android.support.v4.app.FragmentActivity;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-// import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.MotionEvent;
@@ -28,11 +26,19 @@ import java.util.HashMap;
 import java.lang.Math;
 import java.util.UUID;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONException;
+
+
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import android.util.Log;
+
 class DynamicMatrix extends View {
+
 
     private ArrayList<ArrayList<MatrixCell>> mCells;
     private int mCols, mRows;
@@ -43,12 +49,6 @@ class DynamicMatrix extends View {
     int mCellSize;
     private Context mContext;
     private RectF mMatrixBounds = new RectF();
-    //private MatrixCell mPressedCell = null, mMovedToCell = null;
-
-    /*private boolean mRestoreState = false;
-    private int[] mColorsState;
-    private boolean[] mVisibleState;
-    private boolean[] mBordersState;*/
 
     private HashMap<Integer, MatrixPointer> pointers = new HashMap<Integer, MatrixPointer>();
 
@@ -72,6 +72,7 @@ class DynamicMatrix extends View {
         init();
     }
 
+    // initialise the matrix
     private void init() {
 
         /*mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -96,6 +97,7 @@ class DynamicMatrix extends View {
         setupMatrix();
     }
 
+    // when the size changes, re-create the matrix
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
@@ -108,10 +110,10 @@ class DynamicMatrix extends View {
         sizeMatrix();
     }
 
+    // setup matrix is called on init or when the number of rows or cols changes
+    // and creates a default matrix with a zero size, its not sized until onSizeChanged
+    // is called
     private void setupMatrix() {
-        // setup matrix is called on init or when the number of rows or cols changes
-        // and creates a default matrix with a zero size, its not sized until onSizeChanged
-        // is called
 
         mMatrixWidth = 0;
         mMatrixHeight = 0;
@@ -135,8 +137,8 @@ class DynamicMatrix extends View {
         }
     }
 
+    // called when the screen size of the matrix needs to change
     private void sizeMatrix() {
-        // called when the screen size of the matrix needs to change
 
         // calc potential size of matrix
         int left = 0, top = 0;
@@ -173,6 +175,7 @@ class DynamicMatrix extends View {
 
     }
 
+
     private RectF sizeCell(int c, int r) {
         return new RectF(
                 (int) mMatrixBounds.left + (c * mCellSize),
@@ -181,6 +184,7 @@ class DynamicMatrix extends View {
                 (int) mMatrixBounds.top + (r * mCellSize) + mCellSize);
     }
 
+    // called when the control needs to be drawn
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
@@ -200,6 +204,7 @@ class DynamicMatrix extends View {
             }
         }
 
+        // fancy animation stuff, but its a bit weird
         /*for (Integer pointerId : pointers.keySet()){
             MatrixPointer pointer = pointers.get(pointerId);
 
@@ -222,6 +227,7 @@ class DynamicMatrix extends View {
         }*/
     }
 
+    // manage the touch events
     @Override
     public boolean onTouchEvent(MotionEvent event) {
 
@@ -287,6 +293,7 @@ class DynamicMatrix extends View {
         return true;
     }
 
+    // finds the cell on the matrix from the xy
     private MatrixCell findCellFromXY(float x, float y) {
         /*for (ArrayList<MatrixCell> row : mCells) {
             for (MatrixCell cell : row) {
@@ -306,8 +313,8 @@ class DynamicMatrix extends View {
         return true;
     }
 
+    // updates the matrix, must be called after each update to the matrix to display the changes
     public void update() {
-        // updates the matrix, must be called after each update to the matrix to display the changes
         invalidate();
         requestLayout();
     }
@@ -348,6 +355,8 @@ class DynamicMatrix extends View {
     }
 
     // internal classes
+
+    // keeps track of a single pointer on the matrix
     private class MatrixPointer {
 
         private int mPointedId;
@@ -375,6 +384,7 @@ class DynamicMatrix extends View {
         }
     }
 
+    // represents a cell on the matrix, used to keep track of the state
     public class MatrixCell {
 
         private int mRow, mCol, mCurrentColor, mReleasedColor, mPressedColor, mMovedColor;
@@ -417,22 +427,30 @@ class DynamicMatrix extends View {
         public void setVisible(boolean value) {
             mVisible = value;
         }
+
+        // called when the cell is pressed
         private void press() {
             mCurrentColor = mPressedColor;
             mPressed = true;
             invalidate();
             requestLayout();
         }
+
+        // called when the cell is released
         private void release() {
             mCurrentColor = mReleasedColor;
             mPressed = false;
             invalidate();
             requestLayout();
         }
+
+        // called when the cell is moved
         private void moved() {
             invalidate();
             requestLayout();
         }
+
+        // manages the colors in the cell
         private void updateColors(int color) {
             mReleasedColor = color;
             mPressedColor = manipulateColor(color, 0.85f);
@@ -445,6 +463,7 @@ class DynamicMatrix extends View {
             }
         }
 
+        // manipulates a color
         private int manipulateColor(int color, float factor) {
             int a = Color.alpha(color);
             int r = Math.round(Color.red(color) * factor);
@@ -483,17 +502,13 @@ public class Matrix extends AppCompatActivity {
 
     String address = null;
     String deviceName = null;
+    StringBuffer dataBuffer = new StringBuffer();
 
-    BluetoothAdapter myBluetooth = null;
-    BluetoothSocket btSocket = null;
-    private boolean isBtConnected = false;
-    private boolean connectionLost = false;
     static final UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
-    private ProgressDialog progress;
-
     TextView statusView;
-
+    TextView debugText;
+    DynamicMatrix matrix;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -503,7 +518,9 @@ public class Matrix extends AppCompatActivity {
 
         statusView = (TextView)findViewById(R.id.status);
 
-        final DynamicMatrix matrix = findViewById(R.id.matrix);
+        debugText = (TextView)findViewById(R.id.debugText);
+
+        matrix = findViewById(R.id.matrix);
 
         Intent newint = getIntent();
 
@@ -529,13 +546,6 @@ public class Matrix extends AppCompatActivity {
         BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
         // Attempt to connect to the device
         mChatService.connect(device, true);
-
-        try {
-            Thread.sleep(3000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        sendMessage("hi");
 
         /*final Button button = findViewById(R.id.button);
         button.setOnClickListener(new View.OnClickListener() {
@@ -591,6 +601,62 @@ public class Matrix extends AppCompatActivity {
         finish();
     }
 
+    private void parseData(String data) {
+        //dataBuffer2 = dataBuffer2 + data;
+        statusView.setText(data);
+        //Log.d("data", data);
+
+        // add the message to the buffer
+        //Log.d("data", data);
+        dataBuffer.append(data);
+        //Log.d("databuffer", dataBuffer.toString());
+
+        // find any complete messages
+        String[] messages = dataBuffer.toString().split("\\n");
+
+        //debugText.setText(dataBuffer.toString());
+
+        int noOfMessages = messages.length;
+        // does the last message end in a \n, if not its incomplete and should be ignored
+        if (!dataBuffer.toString().endsWith("\n")) {
+            noOfMessages = noOfMessages - 1;
+        }
+        debugText.setText(Integer.toString(noOfMessages) + ":" + dataBuffer.toString() + ":");
+
+        if (dataBuffer.lastIndexOf("\n") > -1)
+            dataBuffer.delete(0, dataBuffer.lastIndexOf("\n") + 1);
+            //dataBuffer = dataBuffer.substring(dataBuffer.lastIndexOf("\n"));
+
+        sendMessage("message received");
+
+/*
+        Log.d("len", Integer.toString(size));
+
+        sendMessage("yo\nto");
+
+        for (String message : messages) {
+            Log.d("message", message);
+            // process each message
+            debugText.setText(message);
+            //processMessage(message);
+        }
+*/
+
+        // remove the processed messages from the buffer
+        //if (dataBuffer.lastIndexOf("\n") > -1)
+        //    dataBuffer = dataBuffer.substring(dataBuffer.lastIndexOf("\n"));
+
+        /*matrix.getCell(3, 1).setColor(Color.rgb(0, 255, 0));
+        if (message.equals("bye")) {
+            matrix.getCell(4, 1).setColor(Color.rgb(255, 0, 0));
+        }
+        matrix.update();*/
+    }
+
+    private void processMessage(String message) {
+        statusView.setText(message);
+    }
+
     @Override
     public void onBackPressed() {
         disconnect();
@@ -605,9 +671,11 @@ public class Matrix extends AppCompatActivity {
                     switch (msg.arg1) {
                         case BluetoothChatService.STATE_CONNECTED:
                             statusView.setText("Connected to " + deviceName);
+                            matrix.setVisibility(View.VISIBLE);
                             break;
                         case BluetoothChatService.STATE_CONNECTING:
                             statusView.setText("Connecting to " + deviceName);
+                            matrix.setVisibility(View.INVISIBLE);
                             break;
                         case BluetoothChatService.STATE_LISTEN:
                         case BluetoothChatService.STATE_NONE:
@@ -626,9 +694,9 @@ public class Matrix extends AppCompatActivity {
                 case Constants.MESSAGE_READ:
                     byte[] readBuf = (byte[]) msg.obj;
                     // construct a string from the valid bytes in the buffer
-                    String readMessage = new String(readBuf, 0, msg.arg1);
+                    String readData = new String(readBuf, 0, msg.arg1);
                     // message received
-                    statusView.setText(readMessage);
+                    parseData(readData);
                     //mConversationArrayAdapter.add(mConnectedDeviceName + ":  " + readMessage);
                     break;
                 case Constants.MESSAGE_DEVICE_NAME:
