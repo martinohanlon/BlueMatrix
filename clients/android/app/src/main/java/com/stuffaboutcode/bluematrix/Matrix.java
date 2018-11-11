@@ -602,20 +602,17 @@ public class Matrix extends AppCompatActivity {
     }
 
     private void parseData(String data) {
-        //dataBuffer2 = dataBuffer2 + data;
-        statusView.setText(data);
-        //Log.d("data", data);
+        //statusView.setText(data);
 
         // add the message to the buffer
-        //Log.d("data", data);
         dataBuffer.append(data);
+
+        // debugging log data and buffer
+        //Log.d("data", data);
         //Log.d("databuffer", dataBuffer.toString());
 
         // find any complete messages
         String[] messages = dataBuffer.toString().split("\\n");
-
-        //debugText.setText(dataBuffer.toString());
-
         int noOfMessages = messages.length;
         // does the last message end in a \n, if not its incomplete and should be ignored
         if (!dataBuffer.toString().endsWith("\n")) {
@@ -623,11 +620,14 @@ public class Matrix extends AppCompatActivity {
         }
         debugText.setText(Integer.toString(noOfMessages) + ":" + dataBuffer.toString() + ":");
 
+        // clean the data buffer of any processed messages
         if (dataBuffer.lastIndexOf("\n") > -1)
             dataBuffer.delete(0, dataBuffer.lastIndexOf("\n") + 1);
-            //dataBuffer = dataBuffer.substring(dataBuffer.lastIndexOf("\n"));
 
-        sendMessage("message received");
+        // process messages
+        for (int messageNo = 0; messageNo < noOfMessages; messageNo++) {
+            processMessage(messages[messageNo]);
+        }
 
 /*
         Log.d("len", Integer.toString(size));
@@ -654,7 +654,35 @@ public class Matrix extends AppCompatActivity {
     }
 
     private void processMessage(String message) {
-        statusView.setText(message);
+        sendMessage("processing " + message + "\n");
+        String parameters[] = message.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)");
+
+        if (parameters.length > 1) {
+            // Set matrix size
+            if (parameters[0].equals("1")) {
+                // check length
+                if (parameters.length == 3) {
+                    matrix.setSize(Integer.parseInt(parameters[1]), Integer.parseInt(parameters[2]));
+                    matrix.update();
+                } else {
+                    statusView.setText("Error - Invalid message received");
+                }
+            }
+            else if (parameters[0].equals("2")) {
+                if (parameters.length == 6) {
+                    DynamicMatrix.MatrixCell cell
+                            = matrix.getCell(Integer.parseInt(parameters[1]),Integer.parseInt(parameters[2]));
+                    if (parameters[5].equals("1")) {
+                        cell.setVisible(true);
+                    } else {
+                        cell.setVisible(false);
+                    }
+                    matrix.update();
+                } else {
+                    statusView.setText("Error - Invalid message received");
+                }
+            }
+        }
     }
 
     @Override
