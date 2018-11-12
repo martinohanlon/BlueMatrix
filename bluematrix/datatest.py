@@ -3,7 +3,8 @@ from time import sleep, time
 from signal import pause
 
 def data_received(data):
-    print("data received #{}#".format(data))
+    print("data received '{}'".format(data))
+    s.send("msg1\nmsg2\n")
     sleep(1)
     s.send("hello")
     sleep(1)
