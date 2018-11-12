@@ -188,6 +188,7 @@ class DynamicMatrix extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
+        // draw squares
         for (ArrayList<MatrixCell> row : mCells) {
             for (MatrixCell cell : row ) {
                 if (cell.getVisible()) mCellPaint.setColor(cell.getColor());
@@ -196,6 +197,7 @@ class DynamicMatrix extends View {
             }
         }
 
+        // draw borders
         for (ArrayList<MatrixCell> row : mCells) {
             for (MatrixCell cell : row ) {
                 if (cell.getVisible() && cell.getBorder()) {
@@ -336,6 +338,30 @@ class DynamicMatrix extends View {
         setupMatrix();
         sizeMatrix();
 
+    }
+
+    public void setColor(int color) {
+        for (ArrayList<MatrixCell> row : mCells) {
+            for (MatrixCell cell : row ) {
+                cell.setColor(color);
+            }
+        }
+    }
+
+    public void setVisible(boolean value) {
+        for (ArrayList<MatrixCell> row : mCells) {
+            for (MatrixCell cell : row ) {
+                cell.setVisible(value);
+            }
+        }
+    }
+
+    public void setBorder(boolean value) {
+        for (ArrayList<MatrixCell> row : mCells) {
+            for (MatrixCell cell : row ) {
+                cell.setBorder(value);
+            }
+        }
     }
 
     public int getCols() {
@@ -504,7 +530,9 @@ public class Matrix extends AppCompatActivity {
     String deviceName = null;
     StringBuffer dataBuffer = new StringBuffer();
 
-    static final UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    // static final UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    static final UUID myUUID = UUID.fromString("5c464d54-bb29-4f1e-bcf8-caa0860fb48e");
+
 
     TextView statusView;
     TextView debugText;
@@ -607,7 +635,7 @@ public class Matrix extends AppCompatActivity {
         // add the message to the buffer
         dataBuffer.append(data);
 
-        // debugging log data and buffer
+        // debug - log data and buffer
         //Log.d("data", data);
         //Log.d("databuffer", dataBuffer.toString());
 
@@ -618,7 +646,9 @@ public class Matrix extends AppCompatActivity {
         if (!dataBuffer.toString().endsWith("\n")) {
             noOfMessages = noOfMessages - 1;
         }
-        debugText.setText(Integer.toString(noOfMessages) + ":" + dataBuffer.toString() + ":");
+
+        // debug - write data to screen
+        debugText.setText(Integer.toString(noOfMessages) + ":" + dataBuffer.toString());
 
         // clean the data buffer of any processed messages
         if (dataBuffer.lastIndexOf("\n") > -1)
@@ -629,59 +659,48 @@ public class Matrix extends AppCompatActivity {
             processMessage(messages[messageNo]);
         }
 
-/*
-        Log.d("len", Integer.toString(size));
-
-        sendMessage("yo\nto");
-
-        for (String message : messages) {
-            Log.d("message", message);
-            // process each message
-            debugText.setText(message);
-            //processMessage(message);
-        }
-*/
-
-        // remove the processed messages from the buffer
-        //if (dataBuffer.lastIndexOf("\n") > -1)
-        //    dataBuffer = dataBuffer.substring(dataBuffer.lastIndexOf("\n"));
-
-        /*matrix.getCell(3, 1).setColor(Color.rgb(0, 255, 0));
-        if (message.equals("bye")) {
-            matrix.getCell(4, 1).setColor(Color.rgb(255, 0, 0));
-        }
-        matrix.update();*/
     }
 
     private void processMessage(String message) {
-        sendMessage("processing " + message + "\n");
+        // sendMessage("processing " + message + "\n");
         String parameters[] = message.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)");
+        boolean invalidMessage = false;
 
-        if (parameters.length > 1) {
-            // Set matrix size
-            if (parameters[0].equals("1")) {
-                // check length
-                if (parameters.length == 3) {
+        // Check the message
+        if (parameters.length > 0) {
+            // check length
+            if (parameters.length == 6) {
+
+                // set matrix
+                if (parameters[0].equals("1")) {
                     matrix.setSize(Integer.parseInt(parameters[1]), Integer.parseInt(parameters[2]));
+                    matrix.setColor(Color.parseColor(parameters[3]));
+                    matrix.setBorder(parameters[4].equals("1") ? true : false);
+                    matrix.setVisible(parameters[5].equals("1") ? true : false);
                     matrix.update();
-                } else {
-                    statusView.setText("Error - Invalid message received");
-                }
-            }
-            else if (parameters[0].equals("2")) {
-                if (parameters.length == 6) {
-                    DynamicMatrix.MatrixCell cell
-                            = matrix.getCell(Integer.parseInt(parameters[1]),Integer.parseInt(parameters[2]));
-                    if (parameters[5].equals("1")) {
-                        cell.setVisible(true);
-                    } else {
-                        cell.setVisible(false);
-                    }
+
+                // set cell
+                } else if (parameters[0].equals("2")) {
+                    DynamicMatrix.MatrixCell cell = matrix.getCell(
+                            Integer.parseInt(parameters[1]), Integer.parseInt(parameters[2]));
+                    cell.setColor(Color.parseColor(parameters[3]));
+                    cell.setBorder(parameters[4].equals("1") ? true : false);
+                    cell.setVisible(parameters[5].equals("1") ? true : false);
                     matrix.update();
+
+                // op not recognised
                 } else {
-                    statusView.setText("Error - Invalid message received");
+                    invalidMessage = true;
                 }
+            } else {
+                invalidMessage = true;
             }
+        } else {
+            invalidMessage = true;
+        }
+
+        if (invalidMessage) {
+            statusView.setText("Error - Invalid message received");
         }
     }
 
