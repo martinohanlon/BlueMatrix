@@ -1,5 +1,5 @@
 class Colour():
-    def __init__(self, red = 255, green = 255, blue = 255, alpha = 0):
+    def __init__(self, red = 255, green = 255, blue = 255, alpha = 255):
         self._red = red
         self._green = green
         self._blue = blue
@@ -65,6 +65,10 @@ class Colour():
     @property
     def str_rgba(self):
         return '#%02x%02x%02x%02x' % (self._red, self._green, self._blue, self._alpha)
+
+    @property
+    def str_argb(self):
+        return '#%02x%02x%02x%02x' % (self._alpha, self._red, self._green, self._blue)
 
     def __str__(self):
         return self.str_rgba

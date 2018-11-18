@@ -98,7 +98,7 @@ def device_powered(device_name, powered):
         value = dbus.Boolean(0)
     adapter.Set(ADAPTER_INTERFACE, "Powered", value)
 
-def register_spp(port):
+def register_spp(port, uuid):
 
     service_record = """
     <?xml version="1.0" encoding="UTF-8" ?>
@@ -132,7 +132,6 @@ def register_spp(port):
     manager = dbus.Interface(bus.get_object(SERVICE_NAME, "/org/bluez"), PROFILE_MANAGER)
 
     path = "/bluez"
-    uuid = "00001101-0000-1000-8000-00805f9b34fb"
     opts = {
 #        "AutoConnect" : True,
         "ServiceRecord" : service_record

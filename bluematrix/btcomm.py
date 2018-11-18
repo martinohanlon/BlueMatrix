@@ -174,6 +174,10 @@ class BluetoothServer():
         The Bluetooth device the server should use, the default is "hci0", if
         your device only has 1 Bluetooth adapter this shouldn't need to be changed.
 
+    :param str uuid:
+        The version 4 UUID (universally unique identifier) which this server should use,
+        defaults to "00001101-0000-1000-8000-00805f9b34fb".
+
     :param int port:
         The Bluetooth port the server should use, the default is 1.
 
@@ -203,6 +207,7 @@ class BluetoothServer():
         data_received_callback,
         auto_start = True,
         device = "hci0",
+        uuid = "00001101-0000-1000-8000-00805f9b34fb",
         port = 1,
         encoding = "utf-8",
         power_up_device = False,
@@ -213,6 +218,7 @@ class BluetoothServer():
         self._adapter = BluetoothAdapter(self._device)
 
         self._data_received_callback = data_received_callback
+        self._uuid = uuid
         self._port = port
         self._encoding = encoding
         self._power_up_device = power_up_device
@@ -345,7 +351,7 @@ class BluetoothServer():
                 raise Exception("Bluetooth device {} is turned off".format(self.adapter.device))
 
             #register the serial port profile with Bluetooth
-            register_spp(self._port)
+            register_spp(self._port, self._uuid)
 
             #start Bluetooth server
             #open the Bluetooth socket

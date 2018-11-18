@@ -1,8 +1,13 @@
-from colours import BLUE
+from colours import BLUE, RED, GREEN, WHITE, BLACK, WHITE, YELLOW, Colour
 from btcomm import BluetoothServer
 from threading import Event
+from threads import WrapThread
+
 import json
 from time import sleep
+
+
+
 
 class BlueMatrix(object):
     """
@@ -15,7 +20,7 @@ class BlueMatrix(object):
         visible = True, 
         colour = BLUE, 
         bt_device = "hci0", 
-        bt_port = 1, 
+        bt_port = 2, 
         auto_start_server = True,
         print_messages = True):
 
@@ -37,8 +42,6 @@ class BlueMatrix(object):
         self._when_client_connects = None
         self._when_client_disconnects = None
 
-        self._cb = CommandBuilder(self)
-        
         self._create_server()
 
         if auto_start_server:
@@ -63,7 +66,7 @@ class BlueMatrix(object):
 
     @rows.setter
     def rows(self, value):
-        self._update_cells(self._cols, rows)
+        self._update_cells(self._cols, value)
 
     @property
     def colour(self):
@@ -168,10 +171,6 @@ class BlueMatrix(object):
         except KeyError as e:
             raise KeyError("Cell ({},{}) does not exist".format(col, row))
 
-    def resize(self, cols, rows):
-        self._update_cells(cols, rows)
-        self.server.send(self._cb.all)
-
     # INTERNAL METHODS
     def _update_cells(self, cols, rows):
         # create new cells
@@ -195,13 +194,14 @@ class BlueMatrix(object):
                 when_client_connects = self._client_connected,
                 when_client_disconnects = self._client_disconnected,
                 device = self._bt_device,
+                uuid = "5c464d54-bb29-4f1e-bcf8-caa0860fb48e",
                 port = self._bt_port,
                 power_up_device = True,
                 auto_start = False)
 
     def _client_connected(self):
         # send setup data to the client
-        self._send_matrix_config()
+        self.set_matrix_and_cells()
         
         self._is_connected_event.set()
         self._print_message("Client connected {}".format(self.server.client_address))
@@ -233,15 +233,40 @@ class BlueMatrix(object):
         if self.print_messages:
             print(message)
 
-    def _send_matrix_config(self):
+    def set_matrix_and_cells(self):
         """
-        Sends the whole matrix configuration to the clients.
+        Sends the whole matrix configuration to the client.
         Called when a new client connects.
         """
-        self.server.send(self._cb.matrix())
+        self.set_matrix()
+        
         for cell in self.cells:
-            self.server.send(self._cb.cell(cell))
-            print(cell)
+            if cell.modified:
+                self.set_cell(cell)
+    
+    def set_matrix(self):
+        cmd = "1,{},{},{},{},{}\n"
+        cmd = cmd.format(
+            self.cols,
+            self.rows,
+            self.colour.str_argb,
+            "1" if self.border else "0",
+            "1" if self.visible else "0",
+        )
+        print(cmd)
+        self._server.send(cmd)
+
+    def set_cell(self, cell):
+        cmd = "2,{},{},{},{},{}\n"
+        cmd = cmd.format(
+            cell.col,
+            cell.row,
+            cell.colour.str_argb,
+            "1" if cell.border else "0",
+            "1" if cell.visible else "0",
+        )
+        print(cmd)
+        self._server.send(cmd)
 
     def __str__(self):
         return "cols = {}, rows = {}, border = {}, visible = {}, colour = {}".format(self._col, self._row, self._border, self._visible, self._colour)
@@ -261,17 +286,9 @@ class BlueMatrixCell(object):
     def col(self):
         return self._col
 
-    @col.setter
-    def col(self, value):
-        self._col = col
-
     @property
     def row(self):
         return self._row
-
-    @row.setter
-    def row(self, value):
-        self._row = value
 
     @property
     def colour(self):
@@ -296,47 +313,27 @@ class BlueMatrixCell(object):
     @visible.setter
     def visible(self, value):
         self._visible = value
-        print(self._visible)
+    
+    @property
+    def modified(self):
+        if self._border == self._matrix.border and self._colour == self._matrix.colour and self._visible == self._matrix.visible:
+            return False
+        else:
+            return True 
 
     def __str__(self):
         return "({},{}), border = {}, visible = {}, colour = {}".format(self._col, self._row, self._border, self._visible, self._colour)
-
-
-class CommandBuilder(object):
-    
-    def __init__(self, bm):
-        self._bm = bm
-
-    def matrix(self):
-        cmd = "1,{},{}\n".format(self._bm.cols, self._bm.rows)
-        # cmd = {}
-        # cmd["m"] = {}
-        # cmd["m"]["c"] = self._bm.cols
-        # cmd["m"]["r"] = self._bm.rows
-        return cmd
-
-    def cell(self, cell):
-        cmd = "2,{},{},{},{},{}\n"
-        cmd = cmd.format(
-            cell.col,
-            cell.row,
-            cell.colour.str_rgba,
-            "1" if cell.border else "0",
-            "1" if cell.visible else "0",
-        )
-        # cmd = {}
-        # cmd["c"] = {}
-        # cmd["c"]["c"] = cell.col
-        # cmd["c"]["r"] = cell.row
-        # cmd["c"]["col"] = cell.colour.str_rgba
-        # cmd["c"]["b"] = "1" if cell.border else "0"
-        # cmd["c"]["v"] = "1" if cell.visible else "0"
-        return cmd
         
-bm = BlueMatrix(cols = 5, rows = 5)
+bm = BlueMatrix(cols = 10, rows = 10)
+bm.colour = BLACK
+bm.border = False
 bm.cell(3,3).visible = False
+bm.cell(9, 9).colour = RED
+bm.cell(4, 4).border = False
+bm.cell(9, 9).border = False
 bm.cell(1,1).visible = False
 bm.cell(4,3).visible = False
+bm.cell(6, 7).colour = GREEN
 bm.cell(0,1).visible = False
 from signal import pause
 pause()

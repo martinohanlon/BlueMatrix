@@ -10,9 +10,19 @@ Server sends to client
 
 | - | - |
 | Command | Operator | Parameters |
+
 | Check protocol version | 0 | protocol |
-| Set matrix size | 1 | cols, rows |
-| Set cell | 2 | col, row, rgba, border, visible |
+
+| Set matrix | 1 | cols, rows, argb, border, visible |
+
+| Set matrix colour | 2 | argb |
+| Set matrix border | 3 | border |
+| Set matrix visible | 4 | visible |
+
+| Set cell | 5 | col, row, argb, border, visible |
+| Set cell colour | 5 | col, row, argb |
+| Set cell border | 6 | col, row, border |
+| Set cell visible | 7 | col, row, visible |
 
 Client sends to server
 ----------------------
