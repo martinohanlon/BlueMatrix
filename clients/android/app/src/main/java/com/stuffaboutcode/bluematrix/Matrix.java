@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.lang.Math;
 import java.util.UUID;
+import java.lang.ref.WeakReference;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -52,9 +53,18 @@ class DynamicMatrix extends View {
 
     private HashMap<Integer, MatrixPointer> pointers = new HashMap<Integer, MatrixPointer>();
 
+    public interface DynamicMatrixListener {
+        public void onPress(MatrixCell cell, int pointerId, float x, float y);
+        public void onMove(MatrixCell cell, int pointerId, float x, float y);
+        public void onRelease(MatrixCell cell, int pointerId, float x, float y);
+    }
+
+    private DynamicMatrixListener listener;
+
     public DynamicMatrix(Context context, AttributeSet attrs) {
         super(context, attrs);
 
+        listener = null;
         mContext = context;
 
         TypedArray a = context.getTheme().obtainStyledAttributes(
@@ -70,6 +80,10 @@ class DynamicMatrix extends View {
         }
 
         init();
+    }
+
+    public void setOnUseListener(DynamicMatrixListener listener) {
+        this.listener = listener;
     }
 
     // initialise the matrix
@@ -259,6 +273,8 @@ class DynamicMatrix extends View {
                     pointers.put(pointerId, new MatrixPointer(pointerId, x, y, cell));
 
                     cell.press();
+                    if (listener != null)
+                        listener.onPress(cell, pointerId, x, y);
                 }
                 break;
 
@@ -454,6 +470,14 @@ class DynamicMatrix extends View {
             mVisible = value;
         }
 
+        public int getCol() {
+            return mCol;
+        }
+
+        public int getRow() {
+            return mRow;
+        }
+
         // called when the cell is pressed
         private void press() {
             mCurrentColor = mPressedColor;
@@ -602,6 +626,24 @@ public class Matrix extends AppCompatActivity {
                 matrix.update();
             }
         });*/
+
+        // Once connected setup the listener
+        matrix.setOnUseListener(new DynamicMatrix.DynamicMatrixListener() {
+            @Override
+            public void onPress(DynamicMatrix.MatrixCell cell, int pointerId, float x, float y) {
+                sendMessage("1" + "," + cell.getCol() + "," + cell.getRow() + "," + String.valueOf(pointerId) + "," + x + "," + y + "\n");
+            }
+
+            @Override
+            public void onMove(DynamicMatrix.MatrixCell cell, int pointerId, float x, float y) {
+
+            }
+
+            @Override
+            public void onRelease(DynamicMatrix.MatrixCell cell, int pointerId, float x, float y) {
+
+            }
+        });
     }
 
     public void sendMessage(String message) {
@@ -674,18 +716,37 @@ public class Matrix extends AppCompatActivity {
                 // set matrix
                 if (parameters[0].equals("1")) {
                     matrix.setSize(Integer.parseInt(parameters[1]), Integer.parseInt(parameters[2]));
-                    matrix.setColor(Color.parseColor(parameters[3]));
-                    matrix.setBorder(parameters[4].equals("1") ? true : false);
-                    matrix.setVisible(parameters[5].equals("1") ? true : false);
+                    if (!parameters[3].equals("")) {
+                        try {
+                            matrix.setColor(Color.parseColor(parameters[3]));
+                        }
+                        catch(IllegalArgumentException i){
+                            invalidMessage = true;
+                        }
+                    }
+                    if (!parameters[4].equals(""))
+                        matrix.setBorder(parameters[4].equals("1") ? true : false);
+                    if (!parameters[5].equals(""))
+                        matrix.setVisible(parameters[5].equals("1") ? true : false);
                     matrix.update();
 
                 // set cell
                 } else if (parameters[0].equals("2")) {
                     DynamicMatrix.MatrixCell cell = matrix.getCell(
                             Integer.parseInt(parameters[1]), Integer.parseInt(parameters[2]));
+                    if (!parameters[3].equals("")) {
+                        try {
+                            matrix.setColor(Color.parseColor(parameters[3]));
+                        }
+                        catch(IllegalArgumentException i){
+                            invalidMessage = true;
+                        }
+                    }
                     cell.setColor(Color.parseColor(parameters[3]));
-                    cell.setBorder(parameters[4].equals("1") ? true : false);
-                    cell.setVisible(parameters[5].equals("1") ? true : false);
+                    if (!parameters[4].equals(""))
+                        cell.setBorder(parameters[4].equals("1") ? true : false);
+                    if (!parameters[5].equals(""))
+                        cell.setVisible(parameters[5].equals("1") ? true : false);
                     matrix.update();
 
                 // op not recognised
